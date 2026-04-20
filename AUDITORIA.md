@@ -1,0 +1,109 @@
+# Auditoría Crítica del Código Generado
+
+## Resumen Ejecutivo
+
+Esta auditoría evalúa el código de la API de Gestión de Asistencia Estudiantil siguiendo la lista de verificación de 10 puntos establecida en la Fase 2 del taller. Se identificaron **12 hallazgos críticos** que comprometen la seguridad, mantenibilidad y robustez del sistema en un entorno de producción.
+
+---
+
+## Hallazgo 1 — Vulnerabilidades de Seguridad en Dependencias
+- **Severidad:** alta
+- **Archivo/línea:** package.json, líneas 15-19
+- **Descripción:** El proyecto utiliza dependencias con vulnerabilidades conocidas de seguridad, incluyendo path-to-regexp con vulnerabilidad de DoS y qs con bypass de arrayLimit.
+- **Evidencia:** `npm audit` reporta 4 vulnerabilidades (1 low, 1 moderate, 2 high) incluyendo "path-to-regexp vulnerable to Regular Expression Denial of Service" y "qs's arrayLimit bypass allows denial of service"
+- **Impacto:** Ataques de denegación de servicio (DoS) que pueden hacer que la API sea inaccesible, comprometiendo la disponibilidad del sistema en producción.
+
+## Hallazgo 2 — Ausencia de Rate Limiting
+- **Severidad:** alta
+- **Archivo/línea:** src/app.js, líneas 1-108
+- **Descripción:** La API no implementa limitación de velocidad (rate limiting) para prevenir ataques de fuerza bruta o abuso de endpoints.
+- **Evidencia:** No hay middleware de rate limiting configurado en app.js, permitiendo requests ilimitados desde cualquier IP
+- **Impacto:** Vulnerabilidad a ataques DDoS, spam de registros, y abuso de recursos del servidor que puede degradar el rendimiento o causar caídas del servicio.
+
+## Hallazgo 3 — Exposición de Información Sensible en Logs
+- **Severidad:** media
+- **Archivo/línea:** src/middleware/errorHandler.js, líneas 3-12
+- **Descripción:** El sistema de logging expone información sensible incluyendo stack traces completos y detalles de errores internos en desarrollo.
+- **Evidencia:** `console.error` registra stack traces completos con `err.stack` y detalles internos del sistema
+- **Impacto:** Filtración de información arquitectural y de implementación que puede ser utilizada por atacantes para identificar vulnerabilidades adicionales.
+
+## Hallazgo 4 — Falta de Autenticación y Autorización
+- **Severidad:** alta
+- **Archivo/línea:** src/app.js, líneas 70-108 (todas las rutas)
+- **Descripción:** Todos los endpoints están completamente abiertos sin ningún mecanismo de autenticación o autorización, exponiendo datos de estudiantes sin control de acceso.
+- **Evidencia:** No hay middleware de autenticación en ninguna ruta, cualquier usuario puede acceder a todos los datos de estudiantes y asistencias
+- **Impacto:** Violación masiva de privacidad de datos estudiantiles, incumplimiento de regulaciones de protección de datos (GDPR, LOPD), y exposición no autorizada de información personal.
+
+## Hallazgo 5 — Ausencia de Variables de Entorno y Configuración Hardcodeada
+- **Severidad:** media
+- **Archivo/línea:** src/app.js, líneas 26-30 y 82
+- **Descripción:** Configuraciones críticas como CORS origins y puerto están hardcodeadas o usan valores por defecto inseguros, sin archivo .env.example para guiar la configuración.
+- **Evidencia:** `origin: ['http://localhost:3000']` hardcodeado, `PORT = process.env.PORT || 3000` sin documentación, no existe .env.example
+- **Impacto:** Configuración insegura en producción, dificultad para despliegue en diferentes entornos, y potencial exposición de la API a orígenes no autorizados.
+
+## Hallazgo 6 — Validación Inconsistente de Fechas Inválidas
+- **Severidad:** media
+- **Archivo/línea:** src/models/Asistencia.js, líneas 23-35
+- **Descripción:** La validación de fechas permite fechas técnicamente inválidas como "2024-02-30" que JavaScript convierte automáticamente, creando inconsistencias en los datos.
+- **Evidencia:** El método `validarFecha` no verifica si la fecha es realmente válida en el calendario (ej: febrero 30), solo verifica formato y que no sea futura
+- **Impacto:** Datos inconsistentes en el sistema con fechas que no existen en el calendario real, causando confusión en reportes y análisis de asistencia.
+
+## Hallazgo 7 — Manejo Inadecuado de Errores de Estudiante No Encontrado en Asistencias
+- **Severidad:** media
+- **Archivo/línea:** src/services/AsistenciasService.js, líneas 67-75
+- **Descripción:** El servicio lanza error 404 cuando un estudiante no tiene registros de asistencia, confundiendo "estudiante no existe" con "no tiene asistencias".
+- **Evidencia:** `listarPorEstudiante` lanza `NO_ATTENDANCE_RECORDS` con código 404 cuando debería retornar array vacío para estudiantes existentes sin asistencias
+- **Impacto:** Confusión en la API donde un estudiante válido sin asistencias se reporta como "no encontrado", dificultando la integración con sistemas frontend.
+
+## Hallazgo 8 — Ausencia Completa de Pruebas Funcionales
+- **Severidad:** alta
+- **Archivo/línea:** tests/simple.test.js, líneas 1-5
+- **Descripción:** El proyecto solo contiene un test dummy que verifica "1+1=2", sin ninguna prueba real de los endpoints, validaciones o lógica de negocio.
+- **Evidencia:** El único test existente es `expect(1 + 1).toBe(2)`, no hay tests de integración, unitarios, o de validación de reglas de negocio
+- **Impacto:** Imposibilidad de verificar que el código funciona correctamente, alto riesgo de regresiones en cambios futuros, y falta de documentación ejecutable del comportamiento esperado.
+
+## Hallazgo 9 — Límites de Payload Excesivamente Generosos
+- **Severidad:** media
+- **Archivo/línea:** src/app.js, líneas 34-35
+- **Descripción:** Los límites de payload JSON y URL-encoded están configurados en 10MB, excesivamente altos para una API de gestión estudiantil que maneja datos simples.
+- **Evidencia:** `express.json({ limit: '10mb' })` y `express.urlencoded({ extended: true, limit: '10mb' })` permiten payloads enormes innecesarios
+- **Impacto:** Vulnerabilidad a ataques de agotamiento de memoria y ancho de banda, permitiendo que atacantes envíen payloads masivos que consuman recursos del servidor.
+
+## Hallazgo 10 — Falta de Validación de Entrada en Endpoints de Reportes
+- **Severidad:** media
+- **Archivo/línea:** src/routes/reportes.js, líneas 1-20
+- **Descripción:** Los endpoints de reportes no tienen validaciones de entrada, parámetros de consulta, o límites de paginación, permitiendo consultas potencialmente costosas.
+- **Evidencia:** Rutas `/ausentismo`, `/asistencias`, `/estadisticas` no tienen middleware de validación ni parámetros de límite/offset
+- **Impacto:** Posibilidad de consultas que consuman excesivos recursos del servidor, especialmente problemático con grandes volúmenes de datos de asistencia.
+
+## Hallazgo 11 — Arquitectura de Almacenamiento No Persistente
+- **Severidad:** alta
+- **Archivo/línea:** src/storage/MemoryStorage.js, líneas 1-85
+- **Descripción:** Todo el almacenamiento es en memoria volátil, causando pérdida total de datos al reiniciar el servidor, inaceptable para un sistema de gestión estudiantil.
+- **Evidencia:** `MemoryStorage` usa `Map` en memoria sin persistencia, método `limpiar()` elimina todos los datos, no hay backup o recuperación
+- **Impacto:** Pérdida catastrófica de todos los registros estudiantiles y de asistencia en cada reinicio del servidor, haciendo el sistema completamente inviable para uso real.
+
+## Hallazgo 12 — Documentación Inconsistente con Implementación Real
+- **Severidad:** baja
+- **Archivo/línea:** README.md, líneas 45-50 vs src/app.js línea 82
+- **Descripción:** La documentación indica que el servidor corre en puerto 3000 por defecto, pero en las pruebas reales se ejecuta en puerto 3001, creando confusión.
+- **Evidencia:** README muestra ejemplos con `localhost:3000` pero el servidor actual está configurado para correr en puerto 3001 según las pruebas realizadas
+- **Impacto:** Confusión para desarrolladores y usuarios que siguen la documentación, dificultando la adopción y uso correcto de la API.
+
+---
+
+## Resumen de Severidades
+
+- **Alta:** 4 hallazgos (Vulnerabilidades de dependencias, Rate limiting, Autenticación, Pruebas, Almacenamiento)
+- **Media:** 7 hallazgos (Logs sensibles, Variables entorno, Validación fechas, Manejo errores, Límites payload, Validación reportes)
+- **Baja:** 1 hallazgo (Documentación inconsistente)
+
+## Recomendaciones Prioritarias
+
+1. **Inmediato:** Ejecutar `npm audit fix` para resolver vulnerabilidades de dependencias
+2. **Crítico:** Implementar autenticación y autorización antes de cualquier despliegue
+3. **Urgente:** Reemplazar almacenamiento en memoria por base de datos persistente
+4. **Importante:** Agregar rate limiting y validaciones robustas
+5. **Necesario:** Desarrollar suite completa de pruebas automatizadas
+
+Este código, en su estado actual, **NO ES APTO PARA PRODUCCIÓN** y requiere refactorización significativa antes de manejar datos reales de estudiantes.
