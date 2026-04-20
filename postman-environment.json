@@ -1,0 +1,31 @@
+{
+  "id": "local-environment",
+  "name": "Local Development",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001",
+      "enabled": true,
+      "type": "default"
+    },
+    {
+      "key": "student_id",
+      "value": "",
+      "enabled": true,
+      "type": "default"
+    },
+    {
+      "key": "student_id_2",
+      "value": "",
+      "enabled": true,
+      "type": "default"
+    },
+    {
+      "key": "student_id_3",
+      "value": "",
+      "enabled": true,
+      "type": "default"
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}
