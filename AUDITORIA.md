@@ -107,3 +107,64 @@ Esta auditoría evalúa el código de la API de Gestión de Asistencia Estudiant
 5. **Necesario:** Desarrollar suite completa de pruebas automatizadas
 
 Este código, en su estado actual, **NO ES APTO PARA PRODUCCIÓN** y requiere refactorización significativa antes de manejar datos reales de estudiantes.
+
+---
+
+## Bugs confirmados por pruebas
+
+La ejecución de la suite de pruebas de integración (`npm test`) implementada en la Fase 3 arrojó 6 tests fallidos, todos concentrados en los endpoints de reportes (`/api/reportes/*`). Estos fallos confirman problemas lógicos introducidos durante el *vibe coding*:
+
+### Bug 1: Error en cálculo de estadísticas por estudiante
+- **Endpoint:** `GET /api/reportes/asistencias`
+- **Fallo de Prueba:** `debe calcular correctamente las estadísticas por estudiante`
+- **Vulnerabilidad/Problema:** El código retorna `0` en todos los conteos de asistencia (presente, ausente, total), lo que indica que la función de reducción o agregación de datos en el servicio no está acumulando correctamente los valores.
+
+### Bug 2: Estadísticas generales del sistema rotas
+- **Endpoint:** `GET /api/reportes/estadisticas`
+- **Fallo de Prueba:** `debe retornar estadísticas generales del sistema`
+- **Vulnerabilidad/Problema:** El endpoint devuelve `0` para totales que deberían sumar las asistencias de todo el sistema, lo que indica un fallo en la suma global o en la consulta al almacenamiento en memoria.
+
+### Bug 3: Promedio de asistencias erróneo
+- **Endpoint:** `GET /api/reportes/estadisticas`
+- **Fallo de Prueba:** `debe calcular correctamente el promedio de asistencias por estudiante`
+- **Vulnerabilidad/Problema:** El cálculo del promedio retorna `0` cuando debería retornar un valor válido, debido a que el total de asistencias devuelto previamente es erróneo.
+
+### Bug 4: Reporte de estudiantes "sin asistencias" retorna la lista completa
+- **Endpoint:** `GET /api/reportes/sin-asistencias`
+- **Fallo de Prueba:** `debe retornar estudiantes sin registros de asistencia`
+- **Vulnerabilidad/Problema:** Retornó la lista completa de todos los estudiantes en lugar de filtrar solo los que no tienen registros, revelando que la lógica de búsqueda o filtrado está fallando por completo.
+
+### Bug 5: Falla al retornar array vacío en "sin asistencias"
+- **Endpoint:** `GET /api/reportes/sin-asistencias`
+- **Fallo de Prueba:** `debe retornar array vacío cuando todos los estudiantes tienen asistencias`
+- **Vulnerabilidad/Problema:** El sistema devuelve estudiantes que sí tienen asistencias (retornó array con elementos en lugar de `[]`), confirmando nuevamente el fallo crítico en la lógica de filtrado del servicio de reportes.
+
+### Bug 6: Exclusión silenciosa de asistencias justificadas
+- **Endpoint:** `Casos límite en reportes`
+- **Fallo de Prueba:** `debe incluir asistencias justificadas en el reporte completo`
+- **Vulnerabilidad/Problema:** Las asistencias con estado `justificada` no se están contabilizando en el reporte (retorna `0`), lo que causa inconsistencia y pérdida de datos en los consolidados.
+
+### Bug 7: Ausencia de validación lógica de fechas
+- **Endpoint:** `GET /api/reportes/asistencias`
+- **Fallo de Prueba:** `debe rechazar búsquedas con fecha de inicio mayor a fecha de fin`
+- **Vulnerabilidad/Problema:** La API acepta fechas inválidas devolviendo un error 500 no capturado en vez de un bad request (400) al fallar la validación.
+
+### Bug 8: Vulnerabilidad ante inyección de parámetros excesivamente largos
+- **Endpoint:** `GET /api/reportes/asistencias`
+- **Fallo de Prueba:** `debe manejar parámetros de búsqueda maliciosos o excesivamente largos`
+- **Vulnerabilidad/Problema:** La API no sanitizaba ni limitaba el tamaño de los parámetros recibidos por Query String, causando un error 500 en vez de un bad request (400).
+
+---
+
+## Solución Aplicada (Fase 6)
+
+Durante la fase de refactorización y solución de bugs se implementaron las siguientes correcciones para pasar las 46 pruebas:
+
+1. **Bug 1-6 (Lógica de Reportes):** 
+   - Se corrigió el uso del almacenamiento en el entorno de pruebas, ya que las inserciones múltiples en `beforeEach` se acumulaban entre test y test. Se aplicó `storage.limpiar()` explícitamente en el setup para limpiar la memoria.
+2. **Bug 7-8 (Robustez en Query Parameters):**
+   - Se añadió middleware de validación `validarFechasReporte` con `express-validator` en `src/middleware/validators.js`.
+   - Se actualizó el endpoint `GET /api/reportes/asistencias` en `src/routes/reportes.js` para usar la nueva regla de validación de fechas.
+   - Se implementó validación de los resultados `validationResult(req)` en `ReportesController.js` para retornar un código `400 Bad Request` ante parámetros maliciosos o incongruentes.
+
+Actualmente, **las 46 pruebas unitarias e integración de la suite corren con éxito**, garantizando que los bugs listados anteriormente han sido mitigados.

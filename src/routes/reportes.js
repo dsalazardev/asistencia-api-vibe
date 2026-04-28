@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const reportesController = require('../controllers/ReportesController');
+const { validarFechasReporte } = require('../middleware/validators');
 
 // GET /api/reportes/ausentismo - Top 5 estudiantes con más ausencias
 router.get('/ausentismo', 
@@ -9,6 +10,7 @@ router.get('/ausentismo',
 
 // GET /api/reportes/asistencias - Reporte completo de asistencias por estudiante
 router.get('/asistencias', 
+  validarFechasReporte,
   reportesController.obtenerReporteCompletoAsistencias
 );
 

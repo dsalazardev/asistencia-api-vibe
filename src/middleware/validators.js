@@ -1,4 +1,4 @@
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 
 // Validadores para estudiantes
 const validarCrearEstudiante = [
@@ -64,6 +64,33 @@ const validarIdAsistencia = [
     .withMessage('El ID del estudiante debe ser un UUID válido')
 ];
 
+// Validadores para reportes
+const validarFechasReporte = [
+  query('fechaInicio')
+    .optional()
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage('La fecha de inicio debe estar en formato YYYY-MM-DD')
+    .isLength({ max: 10 })
+    .withMessage('El parámetro fechaInicio es demasiado largo'),
+    
+  query('fechaFin')
+    .optional()
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage('La fecha de fin debe estar en formato YYYY-MM-DD')
+    .isLength({ max: 10 })
+    .withMessage('El parámetro fechaFin es demasiado largo')
+    .custom((value, { req }) => {
+      if (req.query.fechaInicio && value) {
+        const inicio = new Date(req.query.fechaInicio);
+        const fin = new Date(value);
+        if (inicio > fin) {
+          throw new Error('La fecha de inicio no puede ser mayor a la fecha de fin');
+        }
+      }
+      return true;
+    })
+];
+
 // Validadores personalizados adicionales
 const validarCodigoEstudiante = (codigo) => {
   const patron = /^EST\d{5}$/;
@@ -100,6 +127,9 @@ module.exports = {
   // Validadores de asistencias
   validarCrearAsistencia,
   validarIdAsistencia,
+
+  // Validadores de reportes
+  validarFechasReporte,
   
   // Funciones de validación personalizadas
   validarCodigoEstudiante,

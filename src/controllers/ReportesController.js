@@ -1,3 +1,4 @@
+const { validationResult } = require('express-validator');
 const reportesService = require('../services/ReportesService');
 
 class ReportesController {
@@ -20,6 +21,18 @@ class ReportesController {
   // Obtener reporte completo de asistencias por estudiante
   async obtenerReporteCompletoAsistencias(req, res, next) {
     try {
+      // Verificar errores de validación
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        const error = new Error('Parámetros de búsqueda inválidos');
+        error.code = 'VALIDATION_ERROR';
+        error.statusCode = 400;
+        error.details = {
+          errors: errors.array()
+        };
+        return next(error);
+      }
+
       const reporte = await reportesService.obtenerReporteCompletoAsistencias();
 
       res.status(200).json({

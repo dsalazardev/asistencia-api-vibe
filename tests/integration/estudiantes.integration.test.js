@@ -91,6 +91,20 @@ describe('Endpoints de Estudiantes - Tests de Integración', () => {
 
       expect(response.body.success).toBe(false);
     });
+
+    test('debe rechazar creación con tipos de datos incorrectos (ej. números en lugar de strings)', async () => {
+      const estudianteData = {
+        codigo: 12345, // Número en lugar de string
+        nombre: 12345
+      };
+
+      const response = await request(app)
+        .post('/api/estudiantes')
+        .send(estudianteData)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+    });
   });
 
   describe('GET /api/estudiantes', () => {

@@ -86,6 +86,21 @@ describe('Endpoints de Asistencias - Tests de Integración', () => {
       expect(response.body.error.code).toBe('STUDENT_NOT_FOUND');
     });
 
+    test('debe rechazar asistencia con un ID de estudiante nulo o vacío', async () => {
+      const asistenciaData = {
+        estudianteId: null,
+        fecha: '2024-01-15',
+        estado: 'presente'
+      };
+
+      const response = await request(app)
+        .post('/api/asistencias')
+        .send(asistenciaData)
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+    });
+
     test('debe rechazar asistencia con fecha futura', async () => {
       const fechaFutura = new Date();
       fechaFutura.setDate(fechaFutura.getDate() + 1);

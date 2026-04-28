@@ -6,6 +6,11 @@ describe('Endpoints de Reportes - Tests de Integración', () => {
 
   // Crear estudiantes y asistencias de prueba
   beforeEach(async () => {
+    // Limpiar almacenamiento y array local
+    const storage = require('../../src/storage/MemoryStorage');
+    storage.limpiar();
+    estudiantes = [];
+
     // Crear 3 estudiantes
     for (let i = 1; i <= 3; i++) {
       const response = await request(app)
@@ -286,6 +291,23 @@ describe('Endpoints de Reportes - Tests de Integración', () => {
       const estudiante1 = response.body.data.find(e => e.codigo === 'EST00001');
       expect(estudiante1.justificada).toBe(1);
       expect(estudiante1.total).toBe(4); // 3 ausentes + 1 justificada
+    });
+
+    test('debe rechazar búsquedas con fecha de inicio mayor a fecha de fin', async () => {
+      const response = await request(app)
+        .get('/api/reportes/asistencias?fechaInicio=2024-01-20&fechaFin=2024-01-10')
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+    });
+
+    test('debe manejar parámetros de búsqueda maliciosos o excesivamente largos', async () => {
+      const paramMalicioso = 'a'.repeat(500);
+      const response = await request(app)
+        .get(`/api/reportes/asistencias?fechaInicio=${paramMalicioso}`)
+        .expect(400); // Dependiendo de la implementación, podría fallar o retornar 400
+
+      expect(response.body.success).toBe(false);
     });
   });
 });
